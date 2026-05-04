@@ -1,4 +1,4 @@
- Fraud Detection with Graph Neural Networks
+🔍 Fraud Detection with Graph Neural Networks
 
 Детекция мошенничества на транзакционных данных с помощью Graph Convolutional Network (GCN) и FastAPI
 
@@ -101,13 +101,6 @@ fraud_gnn/
  GraphSAGE — лучше масштабируется на большие графы
  Temporal features — учитывать время между транзакциями
  SMOTE для графов — oversampling миноритарного класса
-
-
-🛠️ Стек
-Show Image
-Show Image
-Show Image
-Show Image
 
 PyTorch + PyTorch Geometric — GCN модель
 NetworkX — анализ графа
