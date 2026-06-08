@@ -164,7 +164,16 @@ fraud-gnn/
 ├── requirements.txt
 └── README.md
 ```
+## 🚀 Live Demo
 
+🔗 **[fraud-gnn-1.onrender.com](https://fraud-gnn-1.onrender.com)**
+
+| Endpoint | Description |
+|---|---|
+| [GET /](https://fraud-gnn-1.onrender.com/) | Model info & metrics |
+| [POST /scan](https://fraud-gnn-1.onrender.com/docs) | Fraud scoring |
+| [GET /health](https://fraud-gnn-1.onrender.com/health) | Health check |
+| [GET /docs](https://fraud-gnn-1.onrender.com/docs) | Swagger UI |
 ---
 
 ## 🔮 Направления улучшений
