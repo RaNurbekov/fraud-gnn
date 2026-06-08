@@ -1,195 +1,280 @@
 # 🔍 Fraud Detection with Graph Neural Networks (GCN)
 
-> **Детекция мошенничества через анализ транзакционного графа**
-> GCN видит не только транзакцию, но и её связи — как Visa и Mastercard в production
+> **Detecting fraud through transaction graph analysis**
+> GCN sees not just the transaction — but its connections across the entire network
 
 ---
 
-## 📊 Результаты
+## 🚀 Live Demo
 
-| Метрика | Значение |
+| Service | Link |
+|---|---|
+| 🕸️ **Interactive Graph Visualizer** | [fraud-gnn.streamlit.app](https://fraud-gnn-j6nh9vg4mb4tdabnshx2n3.streamlit.app) |
+| ⚡ **REST API** | [fraud-gnn-1.onrender.com](https://fraud-gnn-1.onrender.com) |
+| 📖 **API Docs (Swagger)** | [fraud-gnn-1.onrender.com/docs](https://fraud-gnn-1.onrender.com/docs) |
+
+---
+
+## 📊 Model Performance
+
+| Metric | Value |
 |---|---|
 | **Test AUC-ROC** | **0.7807** |
-| **Fraud Recall** | **0.62** (ловит 62% всех фродов) |
+| **Fraud Recall** | **0.62** — catches 62% of all frauds |
 | Fraud Precision | 0.10 |
-| Узлов в графе | 590,540 |
-| Рёбер в графе | 493,718 |
-| Параметров модели | 5,122 |
+| Graph Nodes | 590,540 transactions |
+| Graph Edges | 493,718 connections |
+| Model Parameters | 5,122 |
 
-> 💡 **Почему Recall важнее Precision в антифроде?** Лучше ложно заблокировать 10 нормальных транзакций, чем пропустить 1 мошенническую. Финансовые потери от фрода несравнимо выше, чем неудобство честного клиента.
+> 💡 **Why Recall > Precision in fraud detection?**
+> Better to block 10 legitimate transactions than miss 1 fraudulent one.
+> Financial losses from fraud far exceed the inconvenience of a false positive.
 
 ---
 
-## 🧠 Ключевая идея: почему GNN лучше классических моделей
-
-Обычные модели (LightGBM, XGBoost) смотрят на каждую транзакцию **изолированно**. GNN смотрит на транзакцию **в контексте её связей** в графе:
+## 🧠 Key Idea — Why GNN beats traditional ML
 
 ```
+Traditional ML (LightGBM):          Graph Neural Network (GCN):
+─────────────────────────           ────────────────────────────
+Sees each transaction               Sees transactions AND
+in ISOLATION                        their CONNECTIONS
+
+Features: amount, time,             Aggregates neighbor features
+card type only                      automatically through graph
+
+Misses: fraud rings,                Detects: coordinated fraud,
+shared card patterns                money mule networks
+
 card_001 ──── txn_A (normal)
-         ──── txn_B (FRAUD)   ← GCN "заражает" соседей подозрением
-         ──── txn_C (normal?) ← повышенный риск из-за связи с txn_B
+         ──── txn_B (FRAUD)   ← GCN "infects" neighbors with suspicion
+         ──── txn_C (normal?) ← elevated risk due to connection with txn_B
 ```
 
-Если карта уже участвовала в подозрительных операциях — модель это видит через рёбра графа. Именно так работают антифрод системы Visa, Mastercard и PayPal.
+This is exactly how Visa and Mastercard's production anti-fraud systems work.
 
 ---
 
-## 🛠 Стек технологий
+## 🛠 Tech Stack
 
-| Компонент | Технология |
+| Component | Technology |
 |---|---|
 | **Deep Learning** | PyTorch |
 | **Graph ML** | PyTorch Geometric (`GCNConv`) |
 | **Graph Construction** | NetworkX |
-| **Backend API** | FastAPI |
+| **REST API** | FastAPI |
+| **Visualization** | Streamlit + Plotly |
 | **Data Processing** | Pandas, NumPy, Scikit-Learn |
 | **Dataset** | IEEE-CIS Fraud Detection (Kaggle) |
+| **Deployment** | Render (API) + Streamlit Cloud (Visualizer) |
 
 ---
 
-## ⚙️ Архитектура системы
+## ⚙️ Architecture
 
 ```
-IEEE-CIS Dataset (590K транзакций)
+IEEE-CIS Dataset (590K transactions)
         │
         ▼
 graph_builder.py
-  Узел = транзакция (590,540 узлов)
-  Ребро = общая карта (card1) между транзакциями
-  Node features = сумма, адрес, временные дельты (10 признаков)
+  Node  = one transaction (590,540 nodes)
+  Edge  = two transactions share the same card (card1)
+  Node features = amount, address, time deltas, counters (12 features)
         │
         ▼
 GCN Model (model.py)
-  GCNConv(10 → 64) → ReLU → Dropout(0.3)   ← соседи 1-го порядка
-  GCNConv(64 → 64) → ReLU                   ← соседи 2-го порядка
-  Linear(64 → 2)   → Softmax                ← классификация
-  
-  Всего параметров: 5,122
+  GCNConv(12 → 64) → ReLU → Dropout(0.3)   ← 1st order neighbors
+  GCNConv(64 → 64) → ReLU                   ← 2nd order neighbors
+  Linear(64 → 2)   → Softmax                ← classification
+
+  Total parameters: 5,122
         │
         ▼
 train.py
   Weighted Cross-Entropy Loss
-  (компенсация дисбаланса классов: 3.5% фрод vs 96.5% норма)
+  (compensates class imbalance: 3.5% fraud vs 96.5% normal)
         │
-        ▼
-api/main.py (FastAPI)
-  POST /scan → real-time inference
+        ├──► FastAPI /scan  (Render)          ← REST API
+        └──► Streamlit app  (Streamlit Cloud) ← Graph Visualizer
 ```
 
 ---
 
-## 🔑 Ключевые особенности
+## 🕸️ Interactive Graph Visualizer
 
-### 1. Граф транзакций как Feature Store
-Вместо ручного feature engineering (velocity check, count features) граф автоматически кодирует историю поведения карты через топологию рёбер. Каждый узел "видит" своих соседей через механизм агрегации GCNConv.
+Streamlit app with 3 tabs:
 
-### 2. Двухслойная агрегация соседей
-```python
-# Слой 1: видит транзакции на той же карте (1-й порядок)
-self.conv1 = GCNConv(in_channels, hidden_channels)
+**Tab 1 — Graph Visualization**
+- Interactive transaction graph — hover over nodes for details
+- Node color = GNN fraud score (green → red)
+- Node size = transaction amount
+- Fraud propagation simulation — see how fraud signal spreads through the network
 
-# Слой 2: видит транзакции на картах связанных карт (2-й порядок)
-# — более широкий контекст мошеннической сети
-self.conv2 = GCNConv(hidden_channels, hidden_channels)
+**Tab 2 — Analytics**
+- KPI cards: fraud count, high-risk nodes, connectivity
+- Amount distribution (fraud vs normal)
+- GNN fraud score histogram
+
+**Tab 3 — Live Scanner**
+- Input transaction parameters via sidebar
+- GCN model computes real-time fraud probability
+- Gauge chart + decision (ALLOW / BLOCK)
+- Explanation: amount vs average, recent activity, time since last
+
+---
+
+## ⚡ REST API
+
+### GET /
+```json
+{
+  "service": "Fraud GNN API",
+  "model": "Graph Convolutional Network (GCN)",
+  "metrics": {
+    "auc_roc": 0.7807,
+    "fraud_recall": 0.62,
+    "graph_nodes": 590540,
+    "graph_edges": 493718
+  }
+}
 ```
 
-### 3. Weighted Loss для дисбаланса классов
-Фрод составляет лишь 3.5% датасета. Weighted Cross-Entropy штрафует модель за пропущенные фроды в 28x сильнее, чем за ложные срабатывания.
-
-### 4. FastAPI /scan для real-time инференса
+### POST /scan
 ```json
-// POST /scan
+// Request
 {
   "card_id": "card_001",
-  "amount": 150.00
+  "amount": 150000.00,
+  "days_since_last_txn": 0.1,
+  "txn_count_7d": 25,
+  "avg_amount_30d": 3000.0
 }
 
 // Response
 {
   "card_id": "card_001",
-  "fraud_probability": 0.0821,
-  "decision": "ALLOW",
-  "model_used": "GCN-v1"
+  "fraud_probability": 0.8821,
+  "decision": "BLOCK",
+  "risk_level": "HIGH",
+  "model_used": "GCN-v1",
+  "explanation": {
+    "amount_vs_avg": "50.0x above average",
+    "recent_activity": "25 transactions in last 7 days",
+    "days_since_last": "0.1 days"
+  }
+}
+```
+
+### GET /health
+```json
+{
+  "status": "healthy",
+  "model": "GCN-v1",
+  "auc_roc": 0.7807,
+  "fraud_recall": 0.62
 }
 ```
 
 ---
 
-## 🚀 Быстрый старт
+## 🚀 Quick Start
 
-### 1. Установка зависимостей
+### 1. Clone the repository
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-pip install torch-geometric pandas numpy scikit-learn networkx fastapi uvicorn
+git clone https://github.com/RaNurbekov/fraud-gnn.git
+cd fraud-gnn
 ```
 
-### 2. Данные
-Скачайте с Kaggle [IEEE-CIS Fraud Detection](https://www.kaggle.com/c/ieee-fraud-detection):
+### 2. Install dependencies
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+pip install torch-geometric
+pip install pandas numpy scikit-learn networkx fastapi uvicorn streamlit plotly
+```
+
+### 3. Download dataset
+Download [IEEE-CIS Fraud Detection](https://www.kaggle.com/c/ieee-fraud-detection) from Kaggle:
 - `train_transaction.csv`
 - `train_identity.csv`
 
-Положите оба файла в папку `data/`.
+Place both files in `data/` folder.
 
-### 3. Построить граф
+### 4. Build the graph
 ```bash
 python graph_builder.py
-# → data/graph.pt (~590K узлов, ~493K рёбер)
+# → data/graph.pt (~590K nodes, ~493K edges)
 ```
 
-### 4. Обучить модель
+### 5. Train the model
 ```bash
 python train.py
-# → Test AUC-ROC: 0.7807
+# → best_model.pt | Test AUC-ROC: 0.7807
 ```
 
-### 5. Запустить API
+### 6. Run the API
 ```bash
 cd api
 uvicorn main:app --reload
 # → http://127.0.0.1:8000/docs
 ```
 
+### 7. Run the Visualizer
+```bash
+streamlit run streamlit_app.py
+# → http://localhost:8501
+```
+
 ---
 
-## 📁 Структура проекта
+## 📁 Project Structure
 
 ```
 fraud-gnn/
 ├── api/
-│   └── main.py           # FastAPI: POST /scan
-├── data/                 # CSV файлы (gitignore)
-├── graph_builder.py      # Построение графа из транзакций
-├── model.py              # Архитектура FraudGCN
-├── train.py              # Обучение + оценка метрик
+│   └── main.py             # FastAPI: POST /scan, GET /health
+├── data/                   # CSV files (gitignored)
+│   └── graph.pt            # Built graph (gitignored)
+├── graph_builder.py        # Graph construction from transactions
+├── model.py                # FraudGCN architecture (GCNConv)
+├── train.py                # Training + evaluation
+├── streamlit_app.py        # Interactive graph visualizer
 ├── requirements.txt
+├── Dockerfile
 └── README.md
 ```
-## 🚀 Live Demo
-
-🔗 **[fraud-gnn-1.onrender.com](https://fraud-gnn-1.onrender.com)**
-
-| Endpoint | Description |
-|---|---|
-| [GET /](https://fraud-gnn-1.onrender.com/) | Model info & metrics |
-| [POST /scan](https://fraud-gnn-1.onrender.com/docs) | Fraud scoring |
-| [GET /health](https://fraud-gnn-1.onrender.com/health) | Health check |
-| [GET /docs](https://fraud-gnn-1.onrender.com/docs) | Swagger UI |
----
-
-## 🔮 Направления улучшений
-
-| Улучшение | Ожидаемый эффект |
-|---|---|
-| **GAT** (Graph Attention Network) | +3-5% AUC за счёт механизма внимания |
-| **GraphSAGE** | Лучшее масштабирование на большие графы |
-| **Гетерогенный граф** | Добавить узлы `email` и `device` — расширить связи |
-| **Temporal features** | Учитывать время между транзакциями одной карты |
 
 ---
 
-## 🔗 Связанные проекты
+## 🔮 Roadmap
 
-- [**fraud-detection-api**](https://github.com/RaNurbekov/fraud-detection-api) — гибридный антифрод: Redis Velocity Check + LightGBM + A/B Testing
-- [**kafka-fraud-streaming**](https://github.com/RaNurbekov/kafka-fraud-streaming) — потоковая архитектура Kafka для real-time детекции
+| Improvement | Expected Impact |
+|---|---|
+| **GAT** (Graph Attention Network) | +3-5% AUC via attention mechanism |
+| **Heterogeneous graph** | Add `email` and `device` nodes — wider fraud network |
+| **GraphSAGE** | Better scaling to larger graphs |
+| **Temporal features** | Time between transactions per card |
+| **SMOTE for graphs** | Oversampling of minority fraud class |
 
-> 💡 **GNN vs классический ML:** `fraud-detection-api` использует LightGBM (AUC ~0.89, быстрый инференс), этот проект использует GCN (AUC 0.78, но видит коллаборативный фрод через граф). Оба подхода дополняют друг друга в production.
+---
+
+## 🔗 Related Projects
+
+Part of a Fintech ML ecosystem:
+
+- [**fraud-detection-api**](https://github.com/RaNurbekov/fraud-detection-api) — Hybrid anti-fraud: Redis Velocity Check + LightGBM + A/B Testing
+- [**credit-risk-api**](https://github.com/RaNurbekov/credit-scoring-ml-api.) — Credit scoring with MLflow + SHAP + Evidently AI
+- [**kafka-fraud-streaming**](https://github.com/RaNurbekov/kafka_anti_fraud) — Real-time Kafka streaming pipeline
+
+> 💡 **GNN vs Classical ML:** `fraud-detection-api` uses LightGBM (AUC ~0.89, fast inference).
+> This project uses GCN (AUC 0.78, but detects collaborative fraud through graph topology).
+> Both approaches complement each other in production.
+
+---
+
+## 📫 Author
+
+**Rashid Nurbekov** — ML Engineer | Fintech & Generative AI | Almaty, Kazakhstan 🇰🇿
+
+[![Telegram](https://img.shields.io/badge/Telegram-@Ytyglika-2CA5E0?style=flat&logo=telegram&logoColor=white)](https://t.me/Ytyglika)
+[![Email](https://img.shields.io/badge/Email-nurbekovrashidjob@gmail.com-D14836?style=flat&logo=gmail&logoColor=white)](mailto:nurbekovrashidjob@gmail.com)
+[![GitHub](https://img.shields.io/badge/GitHub-RaNurbekov-181717?style=flat&logo=github&logoColor=white)](https://github.com/RaNurbekov)
