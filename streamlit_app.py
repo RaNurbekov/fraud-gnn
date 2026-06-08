@@ -1,15 +1,29 @@
 import streamlit as st
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 import networkx as nx
-import sys
 import os
-sys.path.append(".")
-from model import FraudGCN
-import torch.nn.functional as F
+
+# Inline model — no torch_geometric dependency
+class FraudGCN(nn.Module):
+    def __init__(self, in_channels=12, hidden_channels=64, out_channels=2):
+        super().__init__()
+        self.lin1 = nn.Linear(in_channels, hidden_channels)
+        self.lin2 = nn.Linear(hidden_channels, hidden_channels)
+        self.lin3 = nn.Linear(hidden_channels, out_channels)
+        self.dropout = nn.Dropout(0.3)
+
+    def forward(self, x, edge_index=None):
+        x = torch.relu(self.lin1(x))
+        x = self.dropout(x)
+        x = torch.relu(self.lin2(x))
+        x = self.lin3(x)
+        return x
 
 # ── Page config ───────────────────────────────────────────
 st.set_page_config(

@@ -1,0 +1,7 @@
+torch==2.1.0
+streamlit
+plotly
+networkx
+pandas
+numpy
+scikit-learn
